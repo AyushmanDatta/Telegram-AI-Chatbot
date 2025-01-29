@@ -13,11 +13,17 @@ from telegram.ext import (
 )
 from pymongo import MongoClient
 import google.generativeai as genai
+from deep_translator import GoogleTranslator
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Environment setup
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")     
-MONGO_URI = os.getenv("MONGO_URI")                 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") 
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+MONGO_URI = os.getenv("MONGO_URI")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 # Database initialization with connection pooling
 mongo_client = MongoClient(MONGO_URI, maxPoolSize=50, connectTimeoutMS=30000)
 db = mongo_client.telegram_bot_db
@@ -45,6 +51,20 @@ logger = logging.getLogger(__name__)
 
 # Cache for frequently accessed data
 user_cache = {}
+
+# === Translation Function ===
+async def translate_text(text: str, target_language: str = "en") -> str:
+    """
+    Translate text to the target language using Google Translate.
+    Default target language is English ('en').
+    """
+    try:
+        translator = GoogleTranslator(source="auto", target=target_language)
+        translated_text = translator.translate(text)
+        return translated_text
+    except Exception as e:
+        logger.error(f"Translation error: {e}")
+        return text  # Return original text if translation fails
 
 # === Fast Response Times ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -136,7 +156,9 @@ async def generate_and_send_response(update: Update, user_id: int, user_message:
             "timestamp": datetime.now()
         })
 
-        await update.message.reply_text(gemini_response)
+        # Translate the response to the user's language (default: English)
+        translated_response = await translate_text(gemini_response, target_language="en")
+        await update.message.reply_text(translated_response)
 
         # Auto-follow-up after 5 seconds
         await asyncio.sleep(5)
